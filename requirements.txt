@@ -1,0 +1,19 @@
+aiogram==3.15.0
+# aiogram 3.15 requires pydantic<2.10, so the version is pinned explicitly
+pydantic==2.9.2
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.0
+yt-dlp==2026.8.19  # breaks as platforms change - update regularly
+instaloader==4.14.1
+SQLAlchemy[asyncio]==2.0.36  # the asyncio extra pulls greenlet; the async engine needs it
+alembic==1.14.0
+aiosqlite==0.20.0
+asyncpg==0.30.0
+redis==5.2.1
+loguru==0.7.3
+httpx[socks]==0.28.1  # the socks extra is needed for socks5:// PROXY_URL
+
+# yt-dlp uses curl-cffi to impersonate a browser (TLS fingerprint):
+# without it TikTok and Instagram often fail.
+curl-cffi==0.16.3

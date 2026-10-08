@@ -1,0 +1,57 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+      # Local overrides (secrets): read last, so they win. Optional.
+      - path: .env.local
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bot:bot@postgres:5432/video_bot
+      REDIS_URL: redis://redis:6379/0
+      TEMP_DIR: /tmp/video_bot
+    ports:
+      - "8000:8000"
+    volumes:
+      # Temp files live in tmpfs: nothing piles up on disk.
+      - type: tmpfs
+        target: /tmp/video_bot
+        tmpfs:
+          size: 2147483648
+          # tmpfs is mounted root-owned 0755 and shadows the image's chown, so the
+          # non-root process could not create job directories. 1777, same as /tmp.
+          mode: 01777
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bot
+      POSTGRES_PASSWORD: bot
+      POSTGRES_DB: video_bot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot -d video_bot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
