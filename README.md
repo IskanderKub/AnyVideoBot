@@ -1,113 +1,147 @@
-# AnyVideoBot
+<p align="center">
+  <img src="assets/logo.png" alt="AnyVideoBot" width="420">
+</p>
 
-A Telegram bot: send a link, get an MP4 file back.
-Supports YouTube (videos, Shorts), Instagram (posts and Reels from public accounts),
-TikTok and Pinterest.
+<h1 align="center">AnyVideoBot</h1>
 
-In a direct chat, sending the link is enough. In a group the bot answers only when called:
+<p align="center">
+  Send a link to a Telegram bot — get the video back as an MP4 file.
+</p>
+
+---
+
+## What it does
+
+Social apps make it hard to keep a video you liked. AnyVideoBot turns a link into a normal
+MP4 file you can save, forward or edit.
+
+| Platform | What works |
+|---|---|
+| **YouTube** | Videos and Shorts |
+| **Instagram** | Posts and Reels from public accounts |
+| **TikTok** | Videos |
+| **Pinterest** | Pins containing video |
+
+No ads, no watermarks, no website to visit. The file is deleted from the server right after
+it is sent — nothing is kept.
+
+## How to use it
+
+**In a direct chat** — just send the link:
 
 ```
-@link https://www.youtube.com/shorts/xxxx     link in the message
-@link                                          as a reply to a message with a link
-@bot_name https://…                            a mention (always works)
+You:  https://www.youtube.com/shorts/xxxxxxxxx
+Bot:  ⏳ Processing the link (YouTube)…
+Bot:  🎬 video.mp4
 ```
 
-Built to a written spec: webhook-first architecture, async downloads, per-user rate
-limiting, temp-file cleanup and tests.
+**In a group chat** the bot stays quiet unless you call it, so it never interrupts a
+conversation:
 
-## Stack
+```
+@link https://www.tiktok.com/@user/video/123     link in the same message
+@link                                             as a reply to someone else's link
+@your_bot_name https://…                          a mention also works
+```
 
-Python 3.11+ · aiogram 3 · FastAPI + uvicorn (webhook) · yt-dlp + instaloader ·
-SQLAlchemy 2.0 async + alembic · Redis (rate limiting, FSM) · loguru · Docker
+**Good to know**
 
-## Running
+- Files up to **50 MB** and videos up to **10 minutes** (both configurable).
+- Up to **10 links per 5 minutes** per person.
+- Private accounts, stories and personal invite links cannot be downloaded — the bot says so
+  in plain words instead of failing silently.
 
-**ffmpeg** is required (`sudo apt install ffmpeg`) — without it yt-dlp cannot merge
+## Run your own
+
+You need [Docker](https://docs.docker.com/get-docker/) and a token from
+[@BotFather](https://t.me/BotFather) (`/newbot`, then copy the token).
+
+```bash
+git clone <this repo> && cd AnyVideoBot
+cp -n .env.example .env                                            # shared settings
+printf 'BOT_TOKEN=<your token>\nRUN_MODE=polling\n' > .env.local   # your secret
+docker compose up -d
+```
+
+That is all — write `/start` to your bot. To watch what it does:
+`docker compose logs -f bot`.
+
+> **Keep the token in `.env.local`.** That file is read after `.env` and overrides it, is
+> never committed, and survives `cp .env.example .env`.
+
+<details>
+<summary><b>Without Docker (for development)</b></summary>
+
+Needs Python 3.11+ and **ffmpeg** (`sudo apt install ffmpeg`), which yt-dlp uses to merge
 video with audio.
-
-Locally (long polling, no HTTPS domain needed):
 
 ```bash
 make install
-cp -n .env.example .env                                     # shared settings
-printf 'BOT_TOKEN=<your token>\nRUN_MODE=polling\n' > .env.local   # secrets
+cp -n .env.example .env
+printf 'BOT_TOKEN=<your token>\nRUN_MODE=polling\n' > .env.local
 make migrate
 make dev
 ```
 
-`.env.local` is read after `.env` and overrides it. Keep the token there and nowhere else:
-that file is never committed and `cp .env.example .env` cannot wipe it.
+</details>
 
-In Docker (bot + postgres + redis):
+<details>
+<summary><b>Using the bot in a group</b></summary>
 
-```bash
-cp -n .env.example .env
-printf 'BOT_TOKEN=<your token>\nRUN_MODE=polling\n' > .env.local
-make docker-up
-```
+1. Add the bot to the chat.
+2. Turn privacy mode off at @BotFather: *Bot Settings → Group Privacy → Turn off*.
+3. **Remove the bot from the chat and add it again** — the setting only applies on join.
 
-`RUN_MODE=polling` works in Docker as is. `RUN_MODE=webhook` needs a public HTTPS address:
-fill in `WEBHOOK_URL` and `WEBHOOK_SECRET` and put an HTTPS proxy (nginx/Caddy/Traefik) in
-front of the container — the webhook is then set automatically to
-`${WEBHOOK_URL}/webhook/${WEBHOOK_SECRET}`. With `WEBHOOK_URL=https://example.com`
-Telegram will never reach the bot.
+Without step 3 Telegram never delivers `@link` messages to the bot; it warns about this in
+the log at startup. A mention (`@your_bot_name <link>`) works either way.
 
-## Settings (.env)
+</details>
 
-| Variable | Default | Purpose |
+## Settings
+
+Shared settings go to `.env`, secrets and machine-specific overrides to `.env.local`.
+
+| Variable | Default | What it changes |
 |---|---|---|
-| `BOT_TOKEN` | — | Token from @BotFather (required, keep it in `.env.local`) |
-| `RUN_MODE` | `webhook` | `polling` for development |
-| `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | Service address and webhook secret |
-| `DATABASE_URL` | SQLite in `./data` | Connection string (PostgreSQL in production) |
-| `REDIS_URL` | — | Shared rate limiting and FSM; empty → in-memory |
-| `GROUP_TRIGGERS` | `@link` | Group triggers, comma-separated |
-| `PROXY_URL` / `PROXY_PLATFORMS` | — | Proxy (for everything, or for listed platforms) |
-| `MAX_FILE_SIZE_MB` | `50` | Telegram limit for sending a file |
-| `MAX_VIDEO_DURATION_SEC` | `600` | Duration limit |
-| `RATE_LIMIT_REQUESTS` / `..._WINDOW_SEC` | `10` / `300` | 10 requests per 5 minutes per user |
-| `TELEGRAM_API_BASE_URL` | — | Local Bot API server: files up to 2 GB |
-| `LOG_LEVEL` / `LOG_FILE` | `INFO` / `logs/bot.log` | Logging |
+| `BOT_TOKEN` | — | Token from @BotFather. Required |
+| `RUN_MODE` | `webhook` | `polling` needs no domain and is the easy choice |
+| `GROUP_TRIGGERS` | `@link` | What people type to call the bot in a group |
+| `MAX_FILE_SIZE_MB` | `50` | Telegram's limit for a bot-sent file |
+| `MAX_VIDEO_DURATION_SEC` | `600` | Refuse anything longer |
+| `RATE_LIMIT_REQUESTS` / `..._WINDOW_SEC` | `10` / `300` | Per-person limit |
+| `PROXY_URL` / `PROXY_PLATFORMS` | — | Route some platforms through a proxy |
+| `WEBHOOK_URL` / `WEBHOOK_SECRET` | — | Only for `RUN_MODE=webhook` |
+| `DATABASE_URL` / `REDIS_URL` | SQLite / in-memory | PostgreSQL and Redis in production |
 
-The remaining parameters are documented in [.env.example](.env.example).
+The rest is documented in [.env.example](.env.example).
 
-## Endpoints
+## When something does not work
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/webhook/{secret_token}` | Telegram updates (answers 200 at once, handles in background) |
-| GET | `/health` | Liveness; in polling mode returns `503` if the poller died |
-| GET | `/stats` | Usage stats, requires `Authorization: Bearer $STATS_TOKEN` |
+| Symptom | Reason and fix |
+|---|---|
+| Bot ignores `@link` in a group | Privacy mode is on — see the group section above |
+| "Could not connect to TikTok" | The platform is unreachable from your network: set `PROXY_URL=socks5://host:port` and `PROXY_PLATFORMS=tiktok` |
+| "The page needs to be reloaded" | yt-dlp is outdated — bump the pin in `requirements.txt` and rebuild |
+| "Sign in to confirm you're not a bot" | YouTube blocked the server IP; use a proxy or change the address |
+| A personal Pinterest link fails | `/sent/?invite_code=…` links only open for their recipient — ask for a regular pin link |
+| No answer at all | `curl localhost:8000/health` — it returns `503` when the bot stopped reading updates |
 
-## Operations
+## Under the hood
 
-- **Groups:** turn privacy mode off at @BotFather (*Bot Settings → Group Privacy → Turn off*)
-  and **re-add the bot to the chat** — otherwise Telegram does not deliver `@link` messages
-  to it. The bot warns about privacy mode in the log at startup.
-- **Update yt-dlp regularly** — platforms keep changing their defences, and an old version
-  fails with errors like "The page needs to be reloaded".
-- **A platform unreachable from the server network** (common with TikTok: DNS resolves, TLS
-  does not) — add a proxy: `PROXY_URL=socks5://host:port`, `PROXY_PLATFORMS=tiktok`.
-- **YouTube may block the server IP** ("Sign in to confirm you're not a bot") — rotating the
-  IP or using a proxy helps; the bot recognises such answers and reports a temporary limit.
-- **Instagram:** public posts and Reels only; Stories require authentication.
-- Short links (`pin.it`, `vt.tiktok.com`) are expanded to their canonical address.
-  Pinterest personal invite links (`/sent/?invite_code=…`) do not open publicly — the bot
-  asks for a regular pin link instead.
-- The temp directory must be writable by the container user; the bot refuses to start
-  otherwise. A tmpfs mount needs `mode: 01777`, as set in `docker-compose.yml`.
+Python 3.11+ · aiogram 3 · FastAPI + uvicorn · yt-dlp with instaloader as an Instagram
+fallback · SQLAlchemy 2.0 async + alembic · Redis for rate limiting and FSM · Docker.
 
-## Tests
+Downloads run in worker threads behind a semaphore, so the bot keeps answering while files
+are being fetched. A video too large for Telegram is retried at a lower resolution before
+being refused. Each job gets its own temp directory, removed whether it succeeded or not.
 
-```bash
-make test
-```
+Endpoints: `POST /webhook/{secret}` for Telegram updates, `GET /health` for liveness,
+`GET /stats` for usage counts (needs `Authorization: Bearer $STATS_TOKEN`).
 
-Covering platform detection, URL parsing, short-link expansion, proxy selection, mapping of
-yt-dlp errors to user messages, the rate limiter, temp-file cleanup, the group trigger and
-the HTTP layer.
+Tests: `make test` — platform detection, URL parsing, short-link expansion, error mapping,
+rate limiting, cleanup, the group trigger and the HTTP layer.
 
 ## Legal note
 
-Downloading content may violate the platforms' terms of use. Respecting copyright is the
-responsibility of whoever uses the bot — the warning is shown in `/start`.
+Downloading content may violate the terms of use of these platforms, and respecting
+copyright is up to whoever uses the bot. The same warning is shown in `/start`.
